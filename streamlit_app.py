@@ -32,38 +32,34 @@ def get_chain(tkr):
         data = requests.get(url, timeout=10).json().get("results", [])
         return pd.DataFrame(data)
     except:
-    except:
         return pd.DataFrame()
 
 df = get_chain(ticker)
 
-# Demo mode if no key or empty data
+# Demo mode if no key or empty
 if df.empty or len(df) < 10:
-    st.info("Demo mode active — paste your free Polygon key for live data")
+    st.info("Demo mode — paste your free Polygon key for live data")
     strikes = np.round(np.arange(spot-70, spot+71, 1), 1)
     dist = np.abs(strikes - spot)
     oi = np.maximum(5000, 40000 * np.exp(-dist/35)).astype(int)
     df = pd.DataFrame({"strike_price": strikes, "open_interest": oi})
 
-# Clean & safe GEX calculation
+# Clean & calculate GEX
 df["strike"] = pd.to_numeric(df["strike_price"], errors="coerce")
-oi_series = df.get("open_interest", None)
-if oi_series is None:
-    df["oi"] = 2000
-else:
-    df["oi"] = pd.to_numeric(oi_series, errors="coerce").fillna(2000)
-
+df["oi"] = pd.to_numeric(df.get("open_interest", 2000), errors="coerce").fillna(2000)
 df["gamma"] = 0.4 / (df["strike"] * 0.2 * np.sqrt(0.08))
-df["gex"]   = -df["oi"] * df["gamma"] * spot*spot * 0.01
+df["gex"] = -df["oi"] * df["gamma"] * spot*spot * 0.01
 
 gex = df.groupby("strike")["gex"].sum().reset_index().dropna()
-king  = gex.loc[gex["gex"].idxmax(), "strike"]
+king = gex.loc[gex["gex"].idxmax(), "strike"]
 vanna = gex.loc[gex["gex"].idxmin(), "strike"]
 
 # Chart
 fig = go.Figure()
-fig.add_trace(go.Bar(x=gex["strike"], y=gex["gex"]/1e6,
-                     marker_color=["limegreen" if x>0 else "crimson" for x in gex["gex"]]))
+fig.add_trace(go.Bar(
+    x=gex["strike"], y=gex["gex"]/1e6,
+    marker_color=["limegreen" if x>0 else "crimson" for x in gex["gex"]]
+))
 fig.add_vline(x=spot, line_color="white", line_dash="dot", annotation_text=f"Spot ${spot:.2f}")
 fig.add_vline(x=king, line_color="gold", line_width=8, annotation_text=f"KING ${king:.1f}")
 fig.add_vline(x=vanna, line_color="purple", line_width=5, annotation_text=f"VANNA ${vanna:.1f}")
