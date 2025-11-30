@@ -44,9 +44,15 @@ if df.empty or len(df) < 10:
     oi = np.maximum(5000, 40000 * np.exp(-dist/35)).astype(int)
     df = pd.DataFrame({"strike_price": strikes, "open_interest": oi})
 
-# Clean & calculate GEX
+# Clean & safe GEX calculation
 df["strike"] = pd.to_numeric(df["strike_price"], errors="coerce")
-df["oi"] = pd.to_numeric(df.get("open_interest", 2000), errors="coerce").fillna(2000)
+
+# Safe OI handling
+if "open_interest" in df.columns:
+    df["oi"] = pd.to_numeric(df["open_interest"], errors="coerce").fillna(2000)
+else:
+    df["oi"] = 2000
+
 df["gamma"] = 0.4 / (df["strike"] * 0.2 * np.sqrt(0.08))
 df["gex"] = -df["oi"] * df["gamma"] * spot*spot * 0.01
 
