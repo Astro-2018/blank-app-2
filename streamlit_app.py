@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import requests
-from datetime import datetime
 
 st.set_page_config(page_title="Heatseeker Pro", layout="wide")
 st.title("Heatseeker Pro — Live Dealer Gamma")
@@ -12,9 +11,9 @@ st.title("Heatseeker Pro — Live Dealer Gamma")
 st.sidebar.header("Live Settings")
 API_KEY = st.sidebar.text_input("Polygon.io Key (free works)", type="password", value="")
 ticker = st.sidebar.selectbox("Ticker", ["SPY","QQQ","IWM","AAPL","TSLA","NVDA","AMD","META","MSFT","GOOGL","SMH"])
-spot_input = st.sidebar.number_input("Manual spot price (if no key)", value=683.39, step=0.1)
+spot_input = st.sidebar.number_input("Manual spot price", value=683.39, step=0.1)
 
-# Try to get live spot price only if key exists
+# Live spot price if key exists
 if API_KEY:
     try:
         spot = requests.get(f"https://api.polygon.io/v2/last/trade/{ticker}?apiKey={API_KEY}", timeout=8).json()["results"]["p"]
@@ -37,22 +36,21 @@ def get_chain(tkr):
 
 df = get_chain(ticker)
 
-# Fallback mock data if no key or failed
+# Fallback mock data if no key or empty
 if df.empty or len(df) < 10:
-    st.info("Demo mode active — paste Polygon key = live data")
+    st.info("Demo mode — paste your free Polygon key for live data")
     strikes = np.round(np.arange(spot-70, spot+71, 1), 1)
     dist = np.abs(strikes - spot)
     oi = np.maximum(5000, 40000 * np.exp(-dist/35)).astype(int)
     df = pd.DataFrame({"strike_price": strikes, "open_interest": oi})
-    df["oi"] = df["open_interest"]
 
-# Clean & calculate GEX
+# Clean data & calculate GEX
 df["strike"] = pd.to_numeric(df["strike_price"], errors="coerce")
-df["oi"] = pd.to_numeric(df.get("open_interest", df["oi"] = df["oi"].fillna(2000)
+df["oi"] = pd.to_numeric(df.get("open_interest", df["open_interest"] := 2000), errors="coerce").fillna(2000)
 df["gamma"] = 0.4 / (df["strike"] * 0.2 * np.sqrt(0.08))
 df["gex"] = -df["oi"] * df["gamma"] * spot*spot * 0.01
 
-gex = df.groupby("strike")["gex"].sum().reset_index()
+gex = df.groupby("strike")["gex"].sum().reset_index().dropna()
 king = gex.loc[gex["gex"].idxmax(), "strike"]
 vanna = gex.loc[gex["gex"].idxmin(), "strike"]
 
@@ -70,6 +68,6 @@ st.plotly_chart(fig, use_container_width=True)
 c1, c2, c3 = st.columns(3)
 c1.metric("KING NODE", f"${king:.1f}", delta=f"{spot-king:+.2f}")
 c2.metric("VANNA TARGET", f"${vanna:.1f}")
-c3.metric("Spot Price", f"${spot:.2f}")
+c3.metric("Spot", f"${spot:.2f}")
 
 st.success(f"Live target → **${king:.1f}** | Vanna flow → **${vanna:.1f}**")
