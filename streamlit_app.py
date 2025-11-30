@@ -41,7 +41,7 @@ if df.empty or len(df) < 10:
     st.info("Demo mode — paste your free Polygon key for live data")
     strikes = np.round(np.arange(spot-70, spot+71, 1), 1)
     dist = np.abs(strikes - spot)
-    oi = np.maximum(5000, 40000 * np.exp(-dist/35)).astype(int)
+oi = np.maximum(5000, 40000 * np.exp(-dist/35) + np.random.normal(0, 5000, len(strikes))) * (1 - 0.5 * (dist / spot > 0.1))  # Penalize deep OTM
     df = pd.DataFrame({"strike_price": strikes, "open_interest": oi})
 
 # Clean & safe GEX calculation
